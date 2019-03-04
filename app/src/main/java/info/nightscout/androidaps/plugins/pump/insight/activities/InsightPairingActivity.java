@@ -1,6 +1,7 @@
 package info.nightscout.androidaps.plugins.pump.insight.activities;
 
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -217,7 +218,8 @@ public class InsightPairingActivity extends NoSplashAppCompatActivity implements
         private List<BluetoothDevice> bluetoothDevices = new ArrayList<>();
 
         public void addDevice(BluetoothDevice bluetoothDevice) {
-            if (!bluetoothDevices.contains(bluetoothDevice)) {
+            if (!bluetoothDevices.contains(bluetoothDevice)
+                    && bluetoothDevice.getBluetoothClass().getMajorDeviceClass() == BluetoothClass.Device.HEALTH_UNCATEGORIZED) { // filter for Pumps
                 bluetoothDevices.add(bluetoothDevice);
                 notifyDataSetChanged();
             }
