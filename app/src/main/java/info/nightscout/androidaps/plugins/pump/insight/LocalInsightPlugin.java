@@ -715,19 +715,6 @@ public class LocalInsightPlugin extends PluginBase implements PumpInterface, Con
     @Override
     public PumpEnactResult setExtendedBolus(Double insulin, Integer durationInMinutes) {
         PumpEnactResult result = cancelExtendedBolusOnly();
-        if(result.success == false) {
-            return result;
-        };
-        if( isFakingTempsByExtendedBoluses() ) {
-            // should in principle not happen
-            result = new PumpEnactResult();
-            result.success(false);
-            result.enacted(false);
-            result.comment(MainApp.gs(R.string.insight_extended_bolus_rejected));
-            log.info("Extended Bolus rejected, extended boluses are exclusively used for temp basals.");
-        } else {
-            result = setExtendedBolusOnly(insulin, durationInMinutes);
-        }
         try {
             fetchStatus();
             readHistory();
