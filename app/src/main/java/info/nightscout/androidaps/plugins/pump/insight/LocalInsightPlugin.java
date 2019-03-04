@@ -710,7 +710,9 @@ public class LocalInsightPlugin extends PluginBase implements PumpInterface, Con
     @Override
     public PumpEnactResult setExtendedBolus(Double insulin, Integer durationInMinutes) {
         PumpEnactResult result = cancelExtendedBolusOnly();
-        if (result.success) result = setExtendedBolusOnly(insulin, durationInMinutes);
+        if (result.success) {
+            result = setExtendedBolusOnly(insulin, durationInMinutes);
+        }
         try {
             fetchStatus();
             readHistory();
