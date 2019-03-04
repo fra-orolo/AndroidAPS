@@ -1174,4 +1174,5 @@ Unerwartetes Verhalten.</string>
         <item quantity="one">%1$d Minute</item>
         <item quantity="other">%1$d Minuten</item>
     </plurals>
+    <string name="insight_extended_bolus_rejected">Verzögerter Bolus nicht ausgeführt, diese Boli sind für Basalraten reserviert.</string>
 </resources>

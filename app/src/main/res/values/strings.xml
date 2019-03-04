@@ -926,6 +926,7 @@
     <string name="insight_app_binding">App binding</string>
     <string name="insight_not_authorized">Not authorized</string>
     <string name="insight_incompatible">Incompatible</string>
+    <string name="insight_extended_bolus_rejected">Extended Bolus rejected, extended boluses are exclusively used for TBR.</string>
     <string name="second">second</string>
     <string name="minute">minute</string>
     <string name="hour">hour</string>
