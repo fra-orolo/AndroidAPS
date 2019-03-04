@@ -421,8 +421,12 @@ public class InsightConnectionService extends Service implements ConnectionEstab
         if (bluetoothDevice == null)
             bluetoothDevice = bluetoothAdapter.getRemoteDevice(pairingDataStorage.getMacAddress());
         setState(InsightState.CONNECTING);
-        connectionEstablisher = new ConnectionEstablisher(this, !pairingDataStorage.isPaired(), bluetoothAdapter, bluetoothDevice, bluetoothSocket);
-        connectionEstablisher.start();
+        connectionEstablisher = new ConnectionEstablisher(this, !pairingDataStorage.isPaired(), bluetoothAdapter, bluetoothDevice, bluetoothSocket, getApplicationContext());
+        if(! pairingDataStorage.isPaired() ) {
+            connectionEstablisher.startPairing();
+        } else {
+            connectionEstablisher.start();
+        }
     }
 
     @Override
