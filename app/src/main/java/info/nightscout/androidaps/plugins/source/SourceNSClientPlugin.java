@@ -43,6 +43,7 @@ public class SourceNSClientPlugin extends PluginBase implements BgSourceInterfac
                 .mainType(PluginType.BGSOURCE)
                 .fragmentClass(BGSourceFragment.class.getName())
                 .pluginName(R.string.nsclientbg)
+                .shortName(R.string.nsclientbg_short)
                 .description(R.string.description_source_ns_client)
         );
     }
