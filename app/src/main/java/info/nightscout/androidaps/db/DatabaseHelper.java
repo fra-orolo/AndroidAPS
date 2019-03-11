@@ -408,7 +408,7 @@ public class DatabaseHelper extends OrmLiteSqliteOpenHelper {
         class PostRunnable implements Runnable {
             public void run() {
                 if (L.isEnabled(L.DATABASE))
-                    log.debug("Firing EventNewBg");
+                    log.debug("Firing EventNewBg "+bgReading);
                 MainApp.bus().post(new EventNewBG(bgReading));
                 scheduledBgPost = null;
             }
