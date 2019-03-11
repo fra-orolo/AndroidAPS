@@ -22,6 +22,7 @@ import info.nightscout.androidaps.data.Profile;
 import info.nightscout.androidaps.db.BgReading;
 import info.nightscout.androidaps.db.TempTarget;
 import info.nightscout.androidaps.events.Event;
+import info.nightscout.androidaps.events.EventRefreshOverview;
 import info.nightscout.androidaps.logging.L;
 import info.nightscout.androidaps.plugins.aps.openAPSSMB.SMBDefaults;
 import info.nightscout.androidaps.plugins.configBuilder.ConfigBuilderPlugin;
@@ -100,6 +101,7 @@ public class IobCobOref1Thread extends Thread {
                 if (bgDataReload) {
                     iobCobCalculatorPlugin.loadBgData(end);
                     iobCobCalculatorPlugin.createBucketedData();
+                    MainApp.bus().post(new EventRefreshOverview("IobCobOref1Thread"));
                 }
                 List<BgReading> bucketed_data = iobCobCalculatorPlugin.getBucketedData();
                 LongSparseArray<AutosensData> autosensDataTable = iobCobCalculatorPlugin.getAutosensDataTable();
