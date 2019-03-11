@@ -121,8 +121,13 @@ public class IobCobCalculatorPlugin extends PluginBase {
     void loadBgData(long now) {
         long start = (long) (now - 60 * 60 * 1000L * (24 + dia));
         bgReadings = MainApp.getDbHelper().getBgreadingsDataFromTime(start, now, false);
-        if (L.isEnabled(L.AUTOSENS))
-            log.debug("BG data loaded. Size: " + bgReadings.size() + " Start date: " + DateUtil.dateAndTimeString(start) + " End date: " + DateUtil.dateAndTimeString(now));
+        if (L.isEnabled(L.AUTOSENS)) {
+            long lastDate = 0;
+            if(! bgReadings.isEmpty()) {
+                lastDate = bgReadings.get(0).date;
+            }
+            log.debug("BG data loaded. Size: " + bgReadings.size() + " Start date: " + DateUtil.dateAndTimeString(start) + " End date: " + DateUtil.dateAndTimeString(now)+" Last Data: " + DateUtil.dateAndTimeString(lastDate));
+        }
     }
 
     public boolean isAbout5minData() {
