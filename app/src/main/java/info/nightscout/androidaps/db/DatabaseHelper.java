@@ -405,7 +405,6 @@ public class DatabaseHelper extends OrmLiteSqliteOpenHelper {
     }
 
     private static void scheduleBgChange(@Nullable final BgReading bgReading) {
-        long now = System.currentTimeMillis();
         class PostRunnable implements Runnable {
             public void run() {
                 if (L.isEnabled(L.DATABASE))
@@ -419,12 +418,8 @@ public class DatabaseHelper extends OrmLiteSqliteOpenHelper {
         if (scheduledBgPost != null)
             scheduledBgPost.cancel(false);
         Runnable task = new PostRunnable();
-        long futureDrift = Math.max((bgReading.date - now), 0);
-        if(futureDrift > 61 * 1000) {
-            log.error("BG readings are "+(futureDrift / 1000.0)+" seconds in the future, synchronize system clocks!");
-        }
-        final int delay = (int) futureDrift +1000;
-        scheduledBgPost = bgWorker.schedule(task, delay, TimeUnit.MILLISECONDS);
+        final int sec = 1;
+        scheduledBgPost = bgWorker.schedule(task, sec, TimeUnit.SECONDS);
 
     }
 
