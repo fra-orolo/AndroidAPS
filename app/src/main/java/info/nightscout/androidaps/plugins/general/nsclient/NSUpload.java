@@ -1,5 +1,6 @@
 package info.nightscout.androidaps.plugins.general.nsclient;
 
+import android.bluetooth.BluetoothAdapter;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -248,7 +249,17 @@ public class NSUpload {
                 if (L.isEnabled(L.NSCLIENT))
                     log.debug("OpenAPS data too old to upload");
             }
-            deviceStatus.device = "openaps://" + Build.MANUFACTURER + " " + Build.MODEL;
+            String deviceName = null;
+            BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
+            if (btAdapter == null) {
+                deviceName = btAdapter.getName();
+            }
+            if (deviceName == null) {
+                deviceName =  Build.MANUFACTURER + " " + Build.MODEL;
+            }
+
+
+            deviceStatus.device = "openaps://";
             JSONObject pumpstatus = ConfigBuilderPlugin.getPlugin().getActivePump().getJSONStatus(profile, profileName);
             if (pumpstatus != null) {
                 deviceStatus.pump = pumpstatus;
