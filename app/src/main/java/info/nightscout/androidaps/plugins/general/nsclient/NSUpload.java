@@ -251,15 +251,14 @@ public class NSUpload {
             }
             String deviceName = null;
             BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
-            if (btAdapter == null) {
+            if (btAdapter != null) {
                 deviceName = btAdapter.getName();
             }
-            if (deviceName == null) {
-                deviceName =  Build.MANUFACTURER + " " + Build.MODEL;
+            if (deviceName == null || deviceName.trim().length() == 0 ) {
+                deviceName = Build.MANUFACTURER + " " + Build.MODEL;
             }
 
-
-            deviceStatus.device = "openaps://";
+            deviceStatus.device = "openaps://" + deviceName;
             JSONObject pumpstatus = ConfigBuilderPlugin.getPlugin().getActivePump().getJSONStatus(profile, profileName);
             if (pumpstatus != null) {
                 deviceStatus.pump = pumpstatus;
