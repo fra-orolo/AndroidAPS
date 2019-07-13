@@ -394,16 +394,11 @@ public class GraphData {
             dummyTreatment.insulin = maxInsulin;
             dummyTreatment.dia = profile.getDia();
             InsulinOrefBasePlugin insulinPlugin = null;
-            long peakTime = 75;
-            if (InsulinOrefBasePlugin.class.isInstance(insulinInterface)) {
-                insulinPlugin = (InsulinOrefBasePlugin) insulinInterface;
-                peakTime = insulinPlugin.getPeak();
-            }
-            peakTime = peakTime * 60 * 1000L;
-            maxActivity = (insulinInterface.iobCalcForTreatment(dummyTreatment, peakTime, dummyTreatment.dia).activityContrib) * 2;
+            long peakTimeMillis = insulinPlugin.getPeak() * 60 * 1000L;
+            maxActivity = (insulinInterface.iobCalcForTreatment(dummyTreatment, peakTimeMillis, dummyTreatment.dia).activityContrib) * 2;
         }
         double plotYUsage = 0.5;
-        return maxActivity / 0.5;
+        return maxActivity / plotYUsage;
     }
 
     // scale in % of vertical size (like 0.3)
