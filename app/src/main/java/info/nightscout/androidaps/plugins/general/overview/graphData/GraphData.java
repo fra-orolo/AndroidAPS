@@ -21,6 +21,7 @@ import java.util.List;
 import info.nightscout.androidaps.Constants;
 import info.nightscout.androidaps.MainApp;
 import info.nightscout.androidaps.R;
+import info.nightscout.androidaps.data.ConstraintChecker;
 import info.nightscout.androidaps.data.Profile;
 import info.nightscout.androidaps.data.IobTotal;
 import info.nightscout.androidaps.db.BgReading;
@@ -28,9 +29,11 @@ import info.nightscout.androidaps.db.CareportalEvent;
 import info.nightscout.androidaps.db.ExtendedBolus;
 import info.nightscout.androidaps.db.ProfileSwitch;
 import info.nightscout.androidaps.db.TempTarget;
+import info.nightscout.androidaps.interfaces.InsulinInterface;
 import info.nightscout.androidaps.logging.L;
 import info.nightscout.androidaps.plugins.configBuilder.ConfigBuilderPlugin;
 import info.nightscout.androidaps.plugins.configBuilder.ProfileFunctions;
+import info.nightscout.androidaps.plugins.insulin.InsulinOrefBasePlugin;
 import info.nightscout.androidaps.plugins.iob.iobCobCalculator.AutosensData;
 import info.nightscout.androidaps.plugins.iob.iobCobCalculator.BasalData;
 import info.nightscout.androidaps.plugins.iob.iobCobCalculator.IobCobCalculatorPlugin;
@@ -53,6 +56,7 @@ import info.nightscout.androidaps.utils.Round;
  */
 
 public class GraphData {
+    public static final double FALLBACK_MAX_ACTIVITY = 0.05d;
     private static Logger log = LoggerFactory.getLogger(L.OVERVIEW);
 
     private GraphView graph;
@@ -345,24 +349,22 @@ public class GraphData {
                 ? Profile.fromMgdlToUnits(bgReadingsArray.get(0).value, units) : Profile.fromMgdlToUnits(100, units);
     }
 
-    public void addActivity(long fromTime, long toTime, double scale) {
+    public void addActivity(long fromTime, long toTime, double maxValue) {
+        Logger log = LoggerFactory.getLogger(L.CORE);
         FixedLineGraphSeries<ScaledDataPoint> actSeries;
         List<ScaledDataPoint> actArray = new ArrayList<>();
-        Double maxActValueFound = Double.MIN_VALUE;
-        double lastAct = 0;
         Scale actScale = new Scale();
         IobTotal total = null;
-
+        double maxActivity = getMaxActivity();
+        log.debug("Determined max activity "+maxActivity);
+        Profile profile;
         for (long time = fromTime; time <= toTime; time += 5 * 60 * 1000L) {
-            Profile profile = ProfileFunctions.getInstance().getProfile(time);
+            profile = ProfileFunctions.getInstance().getProfile(time);
             double act = 0d;
             if (profile != null)
                 total = iobCobCalculatorPlugin.calculateFromTreatmentsAndTempsSynchronized(time, profile);
             act = total.activity;
-
             actArray.add(new ScaledDataPoint(time, act, actScale));
-            maxActValueFound = Math.max(maxActValueFound, Math.abs(act));
-            lastAct = act;
         }
 
         ScaledDataPoint[] actData = new ScaledDataPoint[actArray.size()];
@@ -371,9 +373,37 @@ public class GraphData {
         actSeries.setDrawBackground(false);
         actSeries.setColor(MainApp.gc(R.color.activity));
         actSeries.setThickness(3);
-        actScale.setMultiplier(scale / 0.1d);  //TODO IA should have fixed scale, but what max? For now 0.04d seems reasonable.
+        actScale.setMultiplier(maxValue / maxActivity);  //TODO IA should have fixed scale, but what max? For now 0.04d seems reasonable.
 
         addSeries(actSeries);
+    }
+
+    private double getMaxActivity() {
+        double maxActivity = FALLBACK_MAX_ACTIVITY;
+        ConstraintChecker cs = MainApp.getConstraintChecker();
+        Profile profile = ProfileFunctions.getInstance().getProfile();
+        InsulinInterface insulinInterface = ConfigBuilderPlugin.getPlugin().getActiveInsulin();
+        if( cs != null &&
+            profile != null &&
+                insulinInterface != null) {
+            double maxInsulin = cs.getMaxBolusAllowed().value();
+            maxInsulin = Math.max(cs.getMaxIOBAllowed().value(), maxInsulin);
+            maxInsulin = Math.max(cs.getMaxExtendedBolusAllowed().value(), maxInsulin);
+            Treatment dummyTreatment = new Treatment();
+            dummyTreatment.date = 0;
+            dummyTreatment.insulin = maxInsulin;
+            dummyTreatment.dia = profile.getDia();
+            InsulinOrefBasePlugin insulinPlugin = null;
+            long peakTime = 75;
+            if (InsulinOrefBasePlugin.class.isInstance(insulinInterface)) {
+                insulinPlugin = (InsulinOrefBasePlugin) insulinInterface;
+                peakTime = insulinPlugin.getPeak();
+            }
+            peakTime = peakTime * 60 * 1000L;
+            maxActivity = (insulinInterface.iobCalcForTreatment(dummyTreatment, peakTime, dummyTreatment.dia).activityContrib) * 2;
+        }
+        double plotYUsage = 0.5;
+        return maxActivity / 0.5;
     }
 
     // scale in % of vertical size (like 0.3)

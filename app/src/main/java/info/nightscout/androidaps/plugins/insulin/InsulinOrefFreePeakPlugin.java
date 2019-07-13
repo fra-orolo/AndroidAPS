@@ -43,7 +43,7 @@ public class InsulinOrefFreePeakPlugin extends InsulinOrefBasePlugin {
     }
 
     @Override
-    int getPeak() {
+    public int getPeak() {
         return SP.getInt(R.string.key_insulin_oref_peak, DEFAULT_PEAK);
     }
 }
