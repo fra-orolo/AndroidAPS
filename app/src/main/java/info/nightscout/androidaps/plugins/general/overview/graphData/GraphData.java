@@ -49,6 +49,7 @@ import info.nightscout.androidaps.plugins.general.overview.graphExtensions.Scale
 import info.nightscout.androidaps.plugins.general.overview.graphExtensions.TimeAsXAxisLabelFormatter;
 import info.nightscout.androidaps.plugins.treatments.Treatment;
 import info.nightscout.androidaps.plugins.treatments.TreatmentsPlugin;
+import info.nightscout.androidaps.utils.HardLimits;
 import info.nightscout.androidaps.utils.Round;
 
 /**
@@ -380,22 +381,18 @@ public class GraphData {
 
     private double getMaxActivity() {
         double maxActivity = FALLBACK_MAX_ACTIVITY;
-        ConstraintChecker cs = MainApp.getConstraintChecker();
         Profile profile = ProfileFunctions.getInstance().getProfile();
         InsulinInterface insulinInterface = ConfigBuilderPlugin.getPlugin().getActiveInsulin();
-        if( cs != null &&
+        if(
             profile != null &&
                 insulinInterface != null) {
-            double maxInsulin = cs.getMaxBolusAllowed().value();
-            maxInsulin = Math.max(cs.getMaxIOBAllowed().value(), maxInsulin);
-            maxInsulin = Math.max(cs.getMaxExtendedBolusAllowed().value(), maxInsulin);
+            double maxInsulin = Math.max(HardLimits.maxBolus(), HardLimits.maxIobSMB());
             Treatment dummyTreatment = new Treatment();
             dummyTreatment.date = 0;
             dummyTreatment.insulin = maxInsulin;
             dummyTreatment.dia = profile.getDia();
-            InsulinOrefBasePlugin insulinPlugin = null;
-            long peakTimeMillis = insulinPlugin.getPeak() * 60 * 1000L;
-            maxActivity = (insulinInterface.iobCalcForTreatment(dummyTreatment, peakTimeMillis, dummyTreatment.dia).activityContrib) * 2;
+            long peakTimeMillis = insulinInterface.getPeak() * 60 * 1000L;
+            maxActivity = (insulinInterface.iobCalcForTreatment(dummyTreatment, peakTimeMillis, dummyTreatment.dia).activityContrib);
         }
         double plotYUsage = 0.5;
         return maxActivity / plotYUsage;
