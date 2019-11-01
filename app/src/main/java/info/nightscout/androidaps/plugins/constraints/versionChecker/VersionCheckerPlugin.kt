@@ -61,8 +61,9 @@ object VersionCheckerPlugin : PluginBase(PluginDescription()
                 maxIob
 
     private fun isOldVersion(gracePeriod: Long): Boolean {
-        val now = System.currentTimeMillis()
-        return      now > SP.getLong(R.string.key_last_time_this_version_detected, 0) + gracePeriod
+        return false;
+        //val now = System.currentTimeMillis()
+        //return      now > SP.getLong(R.string.key_last_time_this_version_detected, 0) + gracePeriod
     }
 
     val WARN_EVERY = TimeUnit.DAYS.toMillis(1)
