@@ -47,7 +47,7 @@ public class InsulinOrefUltraRapidActingPlugin extends InsulinOrefBasePlugin {
     }
 
     @Override
-    int getPeak() {
+    public int getPeak() {
         return PEAK;
     }
 }

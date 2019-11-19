@@ -102,7 +102,7 @@ public abstract class InsulinOrefBasePlugin extends PluginBase implements Insuli
         return comment;
     }
 
-    abstract int getPeak();
+    public abstract int getPeak();
 
     abstract String commentStandardText();
 

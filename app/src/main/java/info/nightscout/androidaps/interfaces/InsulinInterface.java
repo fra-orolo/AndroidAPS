@@ -20,4 +20,5 @@ public interface InsulinInterface {
     String getComment();
     double getDia();
     Iob iobCalcForTreatment(Treatment treatment, long time, double dia);
+    int getPeak();
 }

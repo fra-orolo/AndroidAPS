@@ -21,6 +21,7 @@ import java.util.List;
 import info.nightscout.androidaps.Constants;
 import info.nightscout.androidaps.MainApp;
 import info.nightscout.androidaps.R;
+import info.nightscout.androidaps.data.ConstraintChecker;
 import info.nightscout.androidaps.data.IobTotal;
 import info.nightscout.androidaps.data.Profile;
 import info.nightscout.androidaps.db.BgReading;
@@ -28,6 +29,7 @@ import info.nightscout.androidaps.db.CareportalEvent;
 import info.nightscout.androidaps.db.ExtendedBolus;
 import info.nightscout.androidaps.db.ProfileSwitch;
 import info.nightscout.androidaps.db.TempTarget;
+import info.nightscout.androidaps.interfaces.InsulinInterface;
 import info.nightscout.androidaps.logging.L;
 import info.nightscout.androidaps.plugins.aps.loop.APSResult;
 import info.nightscout.androidaps.plugins.aps.loop.LoopPlugin;
@@ -49,6 +51,7 @@ import info.nightscout.androidaps.plugins.iob.iobCobCalculator.IobCobCalculatorP
 import info.nightscout.androidaps.plugins.treatments.Treatment;
 import info.nightscout.androidaps.plugins.treatments.TreatmentsPlugin;
 import info.nightscout.androidaps.utils.DecimalFormatter;
+import info.nightscout.androidaps.utils.HardLimits;
 import info.nightscout.androidaps.utils.Round;
 import info.nightscout.androidaps.utils.SP;
 
@@ -371,8 +374,8 @@ public class GraphData {
                 actArrayHist.add(new ScaledDataPoint(time, act, actScale));
             else
                 actArrayPred.add(new ScaledDataPoint(time, act, actScale));
-            if (act > maxIAValue) maxIAValue = act;
-        }
+            maxIAValue = Math.max(maxIAValue, act);
+         }
 
         ScaledDataPoint[] actData = new ScaledDataPoint[actArrayHist.size()];
         actData = actArrayHist.toArray(actData);
@@ -398,10 +401,39 @@ public class GraphData {
             maxY = maxIAValue;
             minY = -maxIAValue;
         }
-        actScale.setMultiplier(maxY * scale / maxIAValue);
+        double maxActivity = getMaxActivity();
+        actScale.setMultiplier(maxY * scale / maxActivity);
 
         addSeries(actSeriesPred);
     }
+
+    private double getMaxActivity() {
+        double maxActivity = 0.04;// FALLBACK
+        Profile profile = ProfileFunctions.getInstance().getProfile();
+        InsulinInterface insulinInterface = ConfigBuilderPlugin.getPlugin().getActiveInsulin();
+        Double maxInsulin = null;
+        ConstraintChecker cs = MainApp.getConstraintChecker();
+        if(     profile != null &&
+                insulinInterface != null) {
+            if (cs != null) {
+                maxInsulin = cs.getMaxBolusAllowed().value();
+                maxInsulin = Math.max(cs.getMaxIOBAllowed().value(), maxInsulin);
+                maxInsulin = Math.max(cs.getMaxExtendedBolusAllowed().value(), maxInsulin);
+            }
+            if (maxInsulin == null || maxInsulin > (HardLimits.maxBolus()+HardLimits.maxIobSMB()) ) {
+                maxInsulin = Math.max(HardLimits.maxBolus(), HardLimits.maxIobSMB());
+            }
+            Treatment dummyTreatment = new Treatment();
+            dummyTreatment.date = 0;
+            dummyTreatment.insulin = maxInsulin;
+            dummyTreatment.dia = profile.getDia();
+            long peakTimeMillis = insulinInterface.getPeak() * 60 * 1000L;
+            maxActivity = (insulinInterface.iobCalcForTreatment(dummyTreatment, peakTimeMillis, dummyTreatment.dia).activityContrib);
+        }
+        double plotYUsage = 0.7;
+        return maxActivity / plotYUsage;
+    }
+
 
     // scale in % of vertical size (like 0.3)
     public void addIob(long fromTime, long toTime, boolean useForScale, double scale, boolean showPrediction) {
