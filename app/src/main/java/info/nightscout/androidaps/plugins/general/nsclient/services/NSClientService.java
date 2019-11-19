@@ -20,9 +20,14 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
 import java.net.URISyntaxException;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import info.nightscout.androidaps.Config;
 import info.nightscout.androidaps.MainApp;
@@ -282,6 +287,18 @@ public class NSClientService extends Service {
                 opt.reconnection = true;
                 mSocket = IO.socket(nsURL, opt);
                 mSocket.on(Socket.EVENT_CONNECT, onConnect);
+                mSocket.on(Socket.EVENT_ERROR, new Emitter.Listener() {
+                    @Override
+                    public void call(Object... args) {
+                        logError("socket error ", args);
+                    }
+                });
+                mSocket.on(Socket.EVENT_CONNECT_ERROR, new Emitter.Listener() {
+                    @Override
+                    public void call(Object... args) {
+                        logError("socket connect error ", args);
+                    }
+                });
                 mSocket.on(Socket.EVENT_DISCONNECT, onDisconnect);
                 mSocket.on(Socket.EVENT_PING, onPing);
                 RxBus.INSTANCE.send(new EventNSClientNewLog("NSCLIENT", "do connect"));
@@ -299,6 +316,21 @@ public class NSClientService extends Service {
             RxBus.INSTANCE.send(new EventNSClientNewLog("NSCLIENT", "No NS URL specified"));
             RxBus.INSTANCE.send(new EventNSClientStatus("Not configured"));
         }
+    }
+
+    private static void logError(String prefix, Object[] args) {
+        String errorText = "";
+        if(args.length >0 && Throwable.class.isInstance(args[0])) {
+            Throwable ex = (Throwable) args[0];
+            try {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                ex.printStackTrace(new PrintStream(bos));
+                errorText = ex.getMessage() + bos.toString(Charsets.UTF_8.name());
+            }catch(UnsupportedEncodingException uee){
+                //pass
+            }
+        }
+        RxBus.INSTANCE.send(new EventNSClientNewLog("NSCLIENT", prefix + errorText));
     }
 
     private Emitter.Listener onConnect = new Emitter.Listener() {
