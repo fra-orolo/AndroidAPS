@@ -1,12 +1,14 @@
 package info.nightscout.androidaps.plugins.pump.insight.activities;
-
+import android.os.Handler;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Looper;
 import android.text.Html;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -38,7 +40,7 @@ public class InsightAlertActivity extends NoSplashAppCompatActivity {
         @Override
         public void onServiceConnected(ComponentName name, IBinder binder) {
             alertService = ((InsightAlertService.LocalBinder) binder).getService();
-            alertService.setAlertActivity(InsightAlertActivity.this);
+            alertService.register(InsightAlertActivity.this);
             alert = alertService.getAlert();
             if (alert == null) finish();
             else update(alert);
@@ -74,10 +76,18 @@ public class InsightAlertActivity extends NoSplashAppCompatActivity {
         layoutParams.screenBrightness = 1.0F;
         getWindow().setAttributes(layoutParams);
     }
+   @Override
+    protected void onPause() {
+       super.onPause();
+       //alertService.deRegisterAlertActivity(this);
+    }
+    public void onResume() {
+       super.onResume();
+    }
 
     @Override
     protected void onDestroy() {
-        alertService.setAlertActivity(null);
+        alertService.deRegisterAlertActivity(this);
         unbindService(serviceConnection);
         super.onDestroy();
     }
@@ -238,11 +248,13 @@ public class InsightAlertActivity extends NoSplashAppCompatActivity {
         this.icon.setImageDrawable(ContextCompat.getDrawable(this, icon));
         this.errorCode.setText(code);
         this.errorTitle.setText(title);
-        if (description == null) this.errorDescription.setVisibility(View.GONE);
-        else {
+        if (description == null) {
+            this.errorDescription.setVisibility(View.GONE);
+        } else {
             this.errorDescription.setVisibility(View.VISIBLE);
             this.errorDescription.setText(Html.fromHtml(description));
         }
+        alertService.activityShowingAlert(alert);
     }
 
     public void muteClicked(View view) {

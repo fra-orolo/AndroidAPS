@@ -2,6 +2,7 @@ package info.nightscout.androidaps.plugins.pump.insight;
 
 import android.app.Service;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.media.AudioAttributes;
@@ -49,7 +50,10 @@ public class InsightAlertService extends Service implements InsightConnectionSer
     private boolean vibrating;
     private InsightConnectionService connectionService;
     private long ignoreTimestamp;
+    private volatile Long alertStart;
     private AlertType ignoreType;
+    private boolean awaitingActivity = false;
+    private long lastSoundPlay = 0;
 
     private ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
@@ -66,11 +70,11 @@ public class InsightAlertService extends Service implements InsightConnectionSer
     };
 
     private void retrieveRingtone() {
-        Uri uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+        Uri uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
         ringtone = RingtoneManager.getRingtone(this, uri);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             ringtone.setAudioAttributes(new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
                     .setContentType(AudioAttributes.CONTENT_TYPE_UNKNOWN)
                     .setLegacyStreamType(AudioManager.STREAM_RING).build());
         } else ringtone.setStreamType(AudioManager.STREAM_RING);
@@ -81,9 +85,24 @@ public class InsightAlertService extends Service implements InsightConnectionSer
             return alert;
         }
     }
+    public synchronized void deRegisterAlertActivity(InsightAlertActivity alertActivity) {
+        if(this.alertActivity == alertActivity) {
+            this.alertActivity = null;
+            this.awaitingActivity = false;
+            synchronized ($alertLock) {
+                if (this.alert != null) {
+                    ensureActivityLaunched(); // re-launch for Screen Rotate etc
+                }
+            }
+        }
+    }
 
-    public void setAlertActivity(InsightAlertActivity alertActivity) {
+    public synchronized void register(InsightAlertActivity alertActivity) {
+        if (this.alertActivity != null && this.alertActivity != alertActivity) {
+            ensureActivityFinished();
+        }
         this.alertActivity = alertActivity;
+        this.awaitingActivity = false;
     }
 
     public void ignore(AlertType alertType) {
@@ -130,8 +149,21 @@ public class InsightAlertService extends Service implements InsightConnectionSer
         } else if (thread != null) thread.interrupt();
     }
 
+    public void activityShowingAlert(Alert alert) {
+        synchronized ($alertLock) {
+            if (alert.getAlertStatus() == AlertStatus.ACTIVE) {
+                log.debug("Alert showing in activity "+alert.getAlertId());
+                startOrEscalateAlert();
+            } else {
+                log.debug("confirmed Alert showing in activity "+alert);
+                stopAlerting();
+            }
+        }
+    }
+
     private void queryActiveAlert() {
         while (!Thread.currentThread().isInterrupted()) {
+            long waitTime = 1000;
             try {
                 Alert alert = connectionService.requestMessage(new GetActiveAlertMessage()).await().getAlert();
                 if (Thread.currentThread().isInterrupted()) {
@@ -147,25 +179,23 @@ public class InsightAlertService extends Service implements InsightConnectionSer
                         if (alertActivity != null && alert != null)
                             new Handler(Looper.getMainLooper()).post(() -> alertActivity.update(alert));
                     }
+                    if(alertStart != null && alert != null) {
+                        startOrEscalateAlert();
+                    }
                     if (alert == null) {
                         stopAlerting();
                         if (connectionRequested) {
                             connectionService.withdrawConnectionRequest(this);
                             connectionRequested = false;
                         }
-                        if (alertActivity != null)
-                            new Handler(Looper.getMainLooper()).post(() -> alertActivity.finish());
+                        ensureActivityFinished();
                     } else if (!(alert.getAlertType() == ignoreType && System.currentTimeMillis() - ignoreTimestamp < 10000))  {
-                        if (alert.getAlertStatus() == AlertStatus.ACTIVE) alert();
-                        else stopAlerting();
                         if (!connectionRequested) {
                             connectionService.requestConnection(this);
                             connectionRequested = true;
                         }
                         if (alertActivity == null) {
-                            Intent intent = new Intent(InsightAlertService.this, InsightAlertActivity.class);
-                            intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                            new Handler(Looper.getMainLooper()).post(() -> startActivity(intent));
+                            ensureActivityLaunched();
                         }
                     }
                 }
@@ -177,10 +207,10 @@ public class InsightAlertService extends Service implements InsightConnectionSer
             } catch (InsightException e) {
                 log.info("Exception while fetching alert: " + e.getClass().getSimpleName());
             } catch (Exception e) {
-                log.error("Exception while fetching alert", e);
+                log.error("Exception while fetching alert ", e);
             }
             try {
-                Thread.sleep(1000);
+                Thread.sleep(waitTime);
             } catch (InterruptedException e) {
                 break;
             }
@@ -189,29 +219,102 @@ public class InsightAlertService extends Service implements InsightConnectionSer
             connectionService.withdrawConnectionRequest(thread);
             connectionRequested = false;
         }
-        if (alertActivity != null)
-            new Handler(Looper.getMainLooper()).post(() -> alertActivity.finish());
+        ensureActivityFinished();
         stopAlerting();
         thread = null;
     }
 
-    private void alert() {
-        if (!vibrating) {
-            vibrator.vibrate(new long[] {0, 1000, 1000}, 0);
+    private synchronized void ensureActivityLaunched() {
+        if(this.awaitingActivity == false) {
+            this.awaitingActivity = true;
+            Intent intent = new Intent(InsightAlertService.this, InsightAlertActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            new Handler(Looper.getMainLooper()).post(() -> startActivity(intent));
+        }
+    }
+
+    private void ensureActivityFinished() {
+        if (alertActivity != null) {
+            new Handler(Looper.getMainLooper()).post(() -> alertActivity.finish());
+        }
+    }
+
+    private void startOrEscalateAlert() {
+        log.debug("startAlert");
+        long now = System.currentTimeMillis();
+        synchronized ($alertLock) {
+           if (alertStart == null) {
+               log.debug("startAlert remember "+now);
+               this.alertStart = now;
+               this.lastSoundPlay = 0;
+           }
+        }
+        final AudioManager am = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+        int ringerMode = AudioManager.RINGER_MODE_NORMAL;
+        if(am != null) {
+            ringerMode = am.getRingerMode();
+        }
+        boolean shouldVibrate = false;
+        boolean shouldMakeNoise = false;
+        boolean snoozed = false;
+        boolean overTime = false;
+        if (alertStart != null) {
+            snoozed = (alert != null && alert.getAlertStatus() == AlertStatus.SNOOZED);
+            overTime = (alertStart + 300000) < now;
+            if (ringerMode != AudioManager.RINGER_MODE_SILENT) {
+                if ((alertStart + 6000 < now) && ! snoozed) {
+                    shouldVibrate = true;
+                    log.debug("shouldVibrate");
+                }
+                if (ringerMode == AudioManager.RINGER_MODE_NORMAL) {
+                    if ((alertStart + 30000 < now) && ! snoozed) {
+                        shouldMakeNoise = true;
+                        log.debug("shouldMakeNoise");
+                    }
+                }
+            }
+        }
+        if (!vibrating && shouldVibrate) {
+            log.debug("vibrate");
+            vibrator.vibrate(new long[] {0, // pause
+                    1200, // vib
+                    600,  // pause
+                    900, // vib
+                    600,  // pause
+                    900, // vib
+                    (30000 - ((1200+600)*2+1200)) // long pause until repeat
+            }, 0);
             vibrating = true;
         }
-        if (ringtone == null || !ringtone.isPlaying()) {
+        if ((ringtone == null || !ringtone.isPlaying()) && shouldMakeNoise) {
             retrieveRingtone();
-            ringtone.play();
+            if((lastSoundPlay + 60000) < now) {
+                log.debug("play sound");
+                lastSoundPlay = now;
+                ringtone.play();
+            }
+        }
+        if(vibrating && (overTime || snoozed)) {
+            vibrator.cancel();
+            vibrating = false;
+        }
+        if(ringtone != null && ringtone.isPlaying() && (overTime || snoozed)) {
+            ringtone.stop();
         }
     }
 
     private void stopAlerting() {
+        log.debug("stop alert");
+        synchronized ($alertLock) {
+            this.alertStart = null;
+        }
         if (vibrating) {
             vibrator.cancel();
             vibrating = false;
         }
-        if (ringtone != null && ringtone.isPlaying()) ringtone.stop();
+        if (ringtone != null && ringtone.isPlaying()) {
+            ringtone.stop();
+        }
     }
 
     public void mute() {
