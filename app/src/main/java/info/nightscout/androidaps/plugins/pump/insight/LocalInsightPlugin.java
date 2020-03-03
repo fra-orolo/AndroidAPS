@@ -591,6 +591,15 @@ public class LocalInsightPlugin extends PluginBase implements PumpInterface, Con
                 detailedBolusInfo.date = insightBolusID.timestamp;
                 detailedBolusInfo.source = Source.PUMP;
                 detailedBolusInfo.pumpId = insightBolusID.id;
+                if (detailedBolusInfo.carbs > 0 && detailedBolusInfo.carbTime != 0) {
+                    DetailedBolusInfo carbInfo = new DetailedBolusInfo();
+                    carbInfo.carbs = detailedBolusInfo.carbs;
+                    carbInfo.date = detailedBolusInfo.date + detailedBolusInfo.carbTime * 60L * 1000L;
+                    carbInfo.source = Source.USER;
+                    TreatmentsPlugin.getPlugin().addToHistoryTreatment(carbInfo, false);
+                    detailedBolusInfo.carbTime = 0;
+                    detailedBolusInfo.carbs = 0;
+                }
                 TreatmentsPlugin.getPlugin().addToHistoryTreatment(detailedBolusInfo, true);
                 while (true) {
                     synchronized ($bolusLock) {
