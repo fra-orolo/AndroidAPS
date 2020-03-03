@@ -154,7 +154,12 @@ public class ByteBuf {
 
 
     private double getUInt16Decimal(int position) {
-        return new BigDecimal(getUInt16LE(position))
+        int uInt16X100 = getUInt16LE(position);
+        return fromUInt16X100(uInt16X100);
+    }
+
+    public static double fromUInt16X100(int uInt16X100) {
+        return new BigDecimal(uInt16X100)
                 .divide(new BigDecimal(100), 2, RoundingMode.HALF_UP)
                 .doubleValue();
     }
@@ -170,15 +175,19 @@ public class ByteBuf {
     }
 
     public void putUInt16Decimal(double d) {
-        putUInt16LE(new BigDecimal(d)
-                .multiply(new BigDecimal(100))
-                .setScale(0, RoundingMode.HALF_UP)
-                .intValue());
+        putUInt16LE(toUint16X100(d));
     }
 
+    public static int toUint16X100(double d) {
+        return new BigDecimal(d)
+                .multiply(new BigDecimal(100))
+                .setScale(0, RoundingMode.HALF_UP)
+                .intValue();
+    }
 
     private double getUInt32Decimal100(int position) {
-        return new BigDecimal(getUInt32LE(position))
+        long uInt32LE = getUInt32LE(position);
+        return new BigDecimal(uInt32LE)
                 .divide(new BigDecimal(100), 2, RoundingMode.HALF_UP)
                 .doubleValue();
     }

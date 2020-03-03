@@ -123,6 +123,7 @@ import info.nightscout.androidaps.plugins.pump.insight.events.EventLocalInsightU
 import info.nightscout.androidaps.plugins.pump.insight.exceptions.InsightException;
 import info.nightscout.androidaps.plugins.pump.insight.exceptions.app_layer_errors.AppLayerErrorException;
 import info.nightscout.androidaps.plugins.pump.insight.exceptions.app_layer_errors.NoActiveTBRToCanceLException;
+import info.nightscout.androidaps.plugins.pump.insight.utils.ByteBuf;
 import info.nightscout.androidaps.plugins.pump.insight.utils.ExceptionTranslator;
 import info.nightscout.androidaps.plugins.pump.insight.utils.ParameterBlockUtil;
 import info.nightscout.androidaps.plugins.treatments.Treatment;
@@ -452,7 +453,7 @@ public class LocalInsightPlugin extends PluginBase implements PumpInterface, Con
             if (profile.getBasalValues().length > i + 1)
                 nextValue = profile.getBasalValues()[i + 1];
             BasalProfileBlock profileBlock = new BasalProfileBlock();
-            profileBlock.setBasalAmount(basalValue.value > 5 ? Math.round(basalValue.value / 0.1) * 0.1 : Math.round(basalValue.value / 0.01) * 0.01);
+            profileBlock.setBasalAmount(basalValue.value);
             profileBlock.setDuration((((nextValue != null ? nextValue.timeAsSeconds : 24 * 60 * 60) - basalValue.timeAsSeconds) / 60));
             profileBlocks.add(profileBlock);
         }
@@ -491,24 +492,43 @@ public class LocalInsightPlugin extends PluginBase implements PumpInterface, Con
             RxBus.INSTANCE.send(new EventNewNotification(notification));
             result.comment = ExceptionTranslator.getString(e);
         }
+        if(!isThisProfileSet(profile)) {
+            String msg = "Profile can not be verified to be set";
+            log.error(msg);
+            Notification notification = new Notification(Notification.FAILED_UDPATE_PROFILE, MainApp.gs(R.string.failedupdatebasalprofile), Notification.URGENT);
+            RxBus.INSTANCE.send(new EventNewNotification(notification));
+            result.comment = msg;
+        }
         return result;
     }
 
     @Override
     public boolean isThisProfileSet(Profile profile) {
-        if (!isInitialized() || profileBlocks == null) return true;
-        if (profile.getBasalValues().length != profileBlocks.size()) return false;
-        if (activeBasalProfile != BasalProfile.PROFILE_1) return false;
-        for (int i = 0; i < profileBlocks.size(); i++) {
-            BasalProfileBlock profileBlock = profileBlocks.get(i);
+        List<BasalProfileBlock> currentProfileBlocks = this.profileBlocks;
+        if (!isInitialized() || currentProfileBlocks == null) return true;
+        BasalProfile currentActiveBasalProfile = this.activeBasalProfile;
+        if (currentActiveBasalProfile != BasalProfile.PROFILE_1) return false;
+        return areProfilesEqual(profile, currentProfileBlocks, log);
+    }
+
+    public static boolean areProfilesEqual(Profile profile, List<BasalProfileBlock> currentProfileBlocks, Logger log) {
+        if (profile.getBasalValues().length != currentProfileBlocks.size()) return false;
+        for (int i = 0; i < currentProfileBlocks.size(); i++) {
+            BasalProfileBlock profileBlock = currentProfileBlocks.get(i);
             Profile.ProfileValue basalValue = profile.getBasalValues()[i];
             Profile.ProfileValue nextValue = null;
-            if (profile.getBasalValues().length > i + 1)
+            if (profile.getBasalValues().length > i + 1) {
                 nextValue = profile.getBasalValues()[i + 1];
-            if (profileBlock.getDuration() * 60 != (nextValue != null ? nextValue.timeAsSeconds : 24 * 60 * 60) - basalValue.timeAsSeconds)
+            }
+            int blockEnd = (nextValue != null ? nextValue.timeAsSeconds : 24 * 60 * 60);
+            if (profileBlock.getDuration() * 60 !=  (blockEnd - basalValue.timeAsSeconds)) {
+                log.debug("Duration mismatch at "+i);
                 return false;
-            if (Math.abs(profileBlock.getBasalAmount() - basalValue.value) > (basalValue.value > 5 ? 0.05 : 0.005))
+            }
+            if (ByteBuf.toUint16X100(profileBlock.getBasalAmount()) != ByteBuf.toUint16X100(basalValue.value) ) {
+                log.debug("Value mismatch at "+i+String.format(" NS %.3f Pump %.3f", profileBlock.getBasalAmount(), basalValue.value));
                 return false;
+            }
         }
         return true;
     }

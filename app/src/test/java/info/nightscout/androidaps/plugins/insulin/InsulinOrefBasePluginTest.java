@@ -82,7 +82,7 @@ public class InsulinOrefBasePluginTest extends InsulinOrefBasePlugin {
       * @return
      */
     @Override
-    int getPeak() {
+    public int getPeak() {
         return this.peak;
     }
 
